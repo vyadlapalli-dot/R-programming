@@ -1,0 +1,615 @@
+---
+title: "CMS_Provider_Payment_Data"
+author: "Vivek Yadlapalli"
+date: "10/01/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(ggplot2) 
+library(dplyr)
+library(stringr)
+library(reshape2)
+library(ggthemes)
+library(tidyverse)
+library(scales)
+library(plotly)
+library(factoextra)
+library(readxl)
+
+MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017 <- as.data.frame( read_csv("~/Desktop/HealthCareGA/MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017.CSV"))
+
+DRG <-data.frame(DRG = MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`DRG Definition`,'Provider.ID' = MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Provider Id`,'Provider Name' = MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Provider Name`,'Total Discharge' = MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Total Discharges`, 'Average Covered Charges'=MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Average Covered Charges`,'Average Total Payments'= MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Average Total Payments`,'Average Medicare Payments'=MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Average Medicare Payments`)
+
+DRG <- DRG[
+  order( DRG[,1]),
+]
+
+rownames(DRG) <- seq(length=nrow(DRG)) 
+
+Hosp_Agg_Data <- as.data.frame(aggregate(list(MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Total Discharges`,(MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Average Covered Charges`)*(MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Total Discharges`),(MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Average Total Payments`)*(MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Total Discharges`), (MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Average Medicare Payments`)*(MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Total Discharges`)), by=list('Provider Name' = MEDICARE_PROVIDER_CHARGE_INPATIENT_DRGALL_FY2017$`Provider Name`), FUN=sum))
+
+Hosp_Agg_Data <- Hosp_Agg_Data[
+  order( Hosp_Agg_Data[,1]),
+]
+
+write.csv(Zip_Eco,'Zip_Economic_Value.csv')
+
+rownames(Hosp_Agg_Data) <- seq(length=nrow(Hosp_Agg_Data)) 
+
+colnames(Hosp_Agg_Data) <- c("Provider Name","Aggregate Discharges(ALL DRG)","Aggregate Covered Charges(ALL DRG)","Aggregate Total Payments(ALL DRG)","Aggregate Medicare Payments(ALL DRG)")
+
+Hospital_General_Information <- read_csv("~/Desktop/HealthCareGA/Hospital General Information.csv")
+View(Hospital_General_Information)
+
+Hospital_General_Information <- Hospital_General_Information[,-which(names(Hospital_General_Information) %in% c("Address","Hospital overall rating footnote","Mortality national comparison footnote","Safety of care national comparison footnote","Readmission national comparison footnote","Patient experience national comparison footnote","Effectiveness of care national comparison footnote","Timeliness of care national comparison footnote","Efficient use of medical imaging national comparison footnote"))]
+
+DRG$DRGCODE <- substring(DRG$DRG,1,3)
+
+oncology_codes <- c('009',
+'054',
+'055',
+'146',
+'147',
+'148',
+'180',
+'181',
+'182',
+'374',
+'375',
+'376',
+'435',
+'436',
+'437',
+'597',
+'598',
+'599',
+'686',
+'687',
+'688',
+'722',
+'723',
+'724',
+'754',
+'755',
+'756',
+'834',
+'835',
+'836',
+'837',
+'838',
+'839',
+'840',
+'841',
+'842',
+'843',
+'844',
+'845',
+'846',
+'847',
+'848',
+'849')
+
+cardiology_codes <- c('280',
+'281',
+'282',
+'283',
+'284',
+'285',
+'286',
+'287',
+'288',
+'289',
+'290',
+'291',
+'292',
+'293',
+'294',
+'295',
+'296',
+'297',
+'298',
+'299',
+'300',
+'301',
+'302',
+'303',
+'304',
+'305',
+'306',
+'307',
+'308',
+'309',
+'310',
+'311',
+'312',
+'313',
+'314',
+'315',
+'316')
+
+pulmonology_codes <- c('175',
+'176',
+'177',
+'178',
+'179',
+'183',
+'184',
+'185',
+'186',
+'187',
+'188',
+'189',
+'190',
+'191',
+'192',
+'193',
+'194',
+'195',
+'196',
+'197',
+'198',
+'199',
+'200',
+'201',
+'202',
+'203',
+'204',
+'205',
+'206',
+'207',
+'208')
+
+oncology_drg <- DRG[DRG$DRGCODE %in% oncology_codes,]
+oncology_drg_top5 <- oncology_drg[oncology_drg$DRGCODE %in% c('180',
+'054',
+'435'),]
+cardiology_drg <- DRG[DRG$DRGCODE %in% cardiology_codes,]
+cardiology_drg_top5 <- cardiology_drg[cardiology_drg$DRGCODE %in% c('291',
+'292',
+'309'),]
+pulmonology_drg <- DRG[DRG$DRGCODE %in% pulmonology_codes,]
+pulmonology_drg_top5 <- pulmonology_drg[pulmonology_drg$DRGCODE %in% c('190',
+'194',
+'189'),]
+
+Hospital_General_Information$`Provider ID` <- sub("^0+", "", Hospital_General_Information$`Provider ID`)
+
+ Merge_Oncology<- merge(oncology_drg_top5, Hospital_General_Information, by.x="Provider.ID", by.y="Provider ID")
+ Merge_Cardiology<- merge(cardiology_drg_top5, Hospital_General_Information, by.x="Provider.ID", by.y="Provider ID")
+ Merge_Pulmonology<- merge(pulmonology_drg_top5, Hospital_General_Information, by.x="Provider.ID", by.y="Provider ID")
+
+Merge_Cardiology <- Merge_Cardiology %>% arrange(State,`Hospital overall rating`) 
+
+only_291 <- Merge_Cardiology[Merge_Cardiology$DRGCODE %in% c('291'),]
+
+NEW_1<- aggregate(only_291[,c(4, 6:7)], list(only_291$State,only_291$`Hospital overall rating`,only_291$`ZIP Code`,only_291$`Readmission national comparison`), mean)
+
+colnames(NEW_1) <- c("State","Rating","Zipcode","Readmission Rate","Total.Discharge","Average.Total.Payments","Average.Medicare.Payments")
+
+NEW_1 <- NEW_1 %>% arrange(State,Rating) 
+
+NEW_1<- NEW_1[!(NEW_1$Rating%in%'Not Available'),]
+
+NEW_1$Rating <- as.numeric(NEW_1$Rating)
+NEW_1$Readmission_Number<-0
+NEW_1$Readmission_Number[which(NEW_1$`Readmission Rate`=="Above the national average")] <- 1
+NEW_1$Readmission_Number[which(NEW_1$`Readmission Rate`=="Below the national average")] <- -1
+
+zbp16detail_1 <- read_excel("~/Downloads/zbp16detail_1.xlsm")
+zbp16detail_2 <- read_excel("~/Downloads/zbp16detail_2.xlsm")
+zbp16detail_3 <- read_excel("~/Downloads/zbp16detail_3.xlsm")
+zbp16detail_4 <- read_excel("~/Downloads/zbp16detail_4.xlsm")
+zbp16detail_5 <- read_excel("~/Downloads/zbp16detail_5.xlsm")
+zbp16detail_6 <- read_excel("~/Downloads/zbp16detail_6.xlsm")
+zbp16detail_7 <- read_excel("~/Downloads/zbp16detail_7.xlsm")
+zbp16detail_8 <- read_excel("~/Downloads/zbp16detail_8.xlsm")
+zbp16detail_9 <- read_excel("~/Downloads/zbp16detail_9.xlsm")
+
+zbp16detail_9<-aggregate(zbp16detail_9[,12], list(zbp16detail_9$zip), mean)
+zbp16detail_8<-aggregate(zbp16detail_8[,12], list(zbp16detail_8$zip), mean)
+zbp16detail_7<-aggregate(zbp16detail_7[,12], list(zbp16detail_7$zip), mean)
+zbp16detail_6<-aggregate(zbp16detail_6[,12], list(zbp16detail_6$zip), mean)
+zbp16detail_5<-aggregate(zbp16detail_5[,12], list(zbp16detail_5$zip), mean)
+zbp16detail_4<-aggregate(zbp16detail_4[,12], list(zbp16detail_4$zip), mean)
+zbp16detail_3<-aggregate(zbp16detail_3[,12], list(zbp16detail_3$zip), mean)
+zbp16detail_2<-aggregate(zbp16detail_2[,12], list(zbp16detail_2$zip), mean)
+zbp16detail_1<-aggregate(zbp16detail_1[,12], list(zbp16detail_1$zip), mean)
+
+Zip_Eco <- rbind(zbp16detail_1,zbp16detail_2,zbp16detail_3,zbp16detail_4,zbp16detail_5,zbp16detail_6,zbp16detail_7,zbp16detail_8,zbp16detail_9)
+
+Zip_Eco<-aggregate(Zip_Eco[,2], list(Zip_Eco$Group.1), mean)
+
+NEW_1<-merge(NEW_1, Zip_Eco, by.x="Zipcode",by.y = "Group.1")
+
+div_1<- sample(c(TRUE,FALSE),nrow(NEW_1),rep=TRUE,prob = c(0.5,0.5)) ##Dividing the data 80:20
+div_2<-(!div_1)
+
+train<- sample(c(TRUE,FALSE),nrow(NEW_1[div_1,]),rep=TRUE,prob = c(0.8,0.2))
+test<-(!train)
+
+linearmod<-lm(NEW_1$Average.Medicare.Payments~NEW_1$Rating+NEW_1$Readmission_Number+NEW_1$x,data=NEW_1)
+summary(linearmod)
+
+k=2500000 
+
+uszips <- read_csv("~/Downloads/simplemaps_uszips_basicv1.6/uszips.csv")
+View(uszips)
+
+uszips_1 <- data.frame(uszips$zip,uszips$lat,uszips$lng)
+
+colnames(uszips_1) <- c("Zipcode","lat","long")
+
+Zip_Medicare<-merge(NEW_1,uszips_1,by.x ="Zipcode",by.y ="Zipcode")
+Zip_Medicare$cred<-0
+Zip_Medicare$Cluster_score <-0
+for (row in 1:nrow(Zip_Medicare)) {
+  count1 =0
+  TD1=0
+  score1=0
+  count2 =0
+  TD2=0
+  score2=0
+  count3 =0
+  TD3=0
+  score3=0
+  count4 =0
+  TD4=0
+  score4=0
+  count5 =0
+  TD5=0
+  score5=0
+  count6 =0
+  TD6=0
+  score6=0
+  count7=0
+  TD7=0
+  score7=0
+  for (row2 in 1:nrow(Zip_Medicare)){
+    xx = 69.1 * (Zip_Medicare[row2,"lat"] - Zip_Medicare[row,"lat"])
+    yy = 69.1 * (Zip_Medicare[row2,"lat"] - Zip_Medicare[row,"lat"]) * cos(Zip_Medicare[row,"lat"]/57.3)
+    distance = sqrt(xx * xx + yy * yy)
+    if(distance<=5){
+      count1 =  count1+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD1 = TD1+Zip_Medicare[row2,"Total.Discharge"]
+      score1=score1+1/5
+    }else if(distance<=10){
+      count2 =  count2+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD2 = TD2+Zip_Medicare[row2,"Total.Discharge"]
+      score2=score2+1/10
+    }else if(distance<=15){
+      count3 =  count3+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD3 = TD3+Zip_Medicare[row2,"Total.Discharge"]
+      score3=score3+1/15
+    }else if(distance<=20){
+      count4 =  count4+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD4 = TD4+Zip_Medicare[row2,"Total.Discharge"]
+      score4=score4+1/20
+    }else if(distance<=25){
+      count5 =  count5+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD5 = TD5+Zip_Medicare[row2,"Total.Discharge"]
+      score5=score5+1/25
+    }else if(distance<=50){
+      count6 =  count6+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD6 = TD6+Zip_Medicare[row2,"Total.Discharge"]
+      score6=score6+1/50
+    }else{
+      count7 =  count7+(Zip_Medicare[row2,"Average.Medicare.Payments"]*Zip_Medicare[row2,"Total.Discharge"])
+      TD7 = TD7+Zip_Medicare[row2,"Total.Discharge"]
+      score7=score7+1/100
+    }
+    
+  }
+  z1=count1/(count1+k)
+  if(TD1!=0)pp1=count1/TD1 else pp1=0
+  z2=count2/(count2+k) -z1
+  if(TD2!=0)pp2=count2/TD2 else pp2=0
+  z3=count3/(count3+k) -z1-z2
+  if(TD3!=0)pp3=count3/TD3 else pp3=0
+  z4=count4/(count4+k) -z1-z2-z3
+  if(TD4!=0)pp4=count4/TD4 else pp4=0
+  z5=count5/(count5+k) -z1-z2-z3-z4
+  if(TD5!=0)pp5=count5/TD5 else pp5=0
+  z6=count6/(count6+k) -z1-z2-z3-z4-z5
+  if(TD6!=0)pp6=count6/TD6 else pp6=0
+  z7=count7/(count7+k) -z1-z2-z3-z4-z5-z6
+  if(TD7!=0)pp7=count7/TD7 else pp7=0
+  
+  Zip_Medicare[row,"Cluster_score"] <- 1+score1+score2+score3+score4+score5+score6+score7
+  Zip_Medicare[row,"cred"] <- (z1*pp1+z2*pp2+z3*pp3+z4*pp4+z5*pp5+z6*pp6+z7*pp7)
+  print(row)
+}
+
+Zip_only<-data.frame(Zip_Medicare$Zipcode,Zip_Medicare$Average.Medicare.Payments,Zip_Medicare$cred,Zip_Medicare$Cluster_score,Zip_Medicare$lat,Zip_Medicare$long)
+Zip_only<-aggregate(Zip_only[,2:6], list(Zip_only$Zip_Medicare.Zipcode), mean)
+names(Zip_only)<-c("Zip_Medicare.Zipcode","Zip_Medicare.Average.Medicare.Payments","Zip_Medicare.Cluster_score","Zip_Medicare.cred","lat","long")
+rownames(Zip_only) <- Zip_only$Zip_Medicare.Zipcode
+
+Zip_only<-merge(Zip_only,Exonomic_est,by.x ="Zip_Medicare.Zipcode",by.y ="Group.1")
+
+d <- dist(Zip_only, method = "euclidean")
+
+hc5 <- hclust(d, method = "ward.D2" )
+# Cut tree into 4 groups
+sub_grp <- cutree(hc5, k = 10)
+Zip_only$Zip_Medicare.Zipcode<- as.numeric(as.character(Zip_only$Zip_Medicare.Zipcode))
+fviz_cluster(list(data = Zip_only, cluster = sub_grp))
+fviz_nbclust(Zip_only, FUN = hcut, method = "silhouette")
+us<-map_data('state')
+fviz_nbclust(Zip_only, FUN = hcut, method = "wss")
+?fviz_nbclust
+ggplot(Zip_only,aes(long,lat)) +
+  geom_polygon(data=us,aes(x=long,y=lat,group=group),color='gray',fill=NA,alpha=.35)+geom_point(aes(colour=factor(sub_grp)))+scale_fill_manual(values=c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe'),aesthetics = "colour")
+
+Zip_only$clutdiff<-(Zip_only$Zip_Medicare.Average.Medicare.Payments-Zip_only$Zip_Medicare.Cluster_score)
+
+ggplot(Zip_only[sub_grp==1,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#e6194b")
+ggplot(Zip_only[sub_grp==2,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#3cb44b")
+ggplot(Zip_only[sub_grp==3,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#ffe119")
+ggplot(Zip_only[sub_grp==4,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#4363d8")
+ggplot(Zip_only[sub_grp==5,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#f58231")
+ggplot(Zip_only[sub_grp==6,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#911eb4")
+ggplot(Zip_only[sub_grp==7,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#46f0f0")
+ggplot(Zip_only[sub_grp==8,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#f032e6")
+ggplot(Zip_only[sub_grp==9,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#bcf60c")
+ggplot(Zip_only[sub_grp==10,], aes(x=clutdiff,y=x))+
+  geom_point(stat = "identity",colour="#fabebe")
+
+test_1<-Zip_only[sub_grp==1,]
+
+```
+
+## Cardiology {.tabset .tabset-fade}
+Select Payment Type
+
+
+### Medicare Payments
+```{r cars,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+ggplotly(q)
+
+
+# state.graph <- function(df, na.rm = TRUE, ...){
+#   
+# state_list <- unique(df$State)
+# 
+# for (i in seq_along(state_list)) { 
+# 
+#   plot <- 
+#         ggplot(subset(df, df$State==state_list[i]),
+#                aes(fill=DRGCODE, y=Average.Medicare.Payments, x=reorder(`Hospital Name`,`Hospital overall rating`)))+
+#   geom_bar(position="dodge", stat="identity") +
+#         
+#         
+#         ggtitle(paste(state_list[i], ' ,USA \n', 
+#                       "Average Medicare payement per DRG Code \n",
+#                       sep='')) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme(text = element_text(size=15))
+#       
+#       
+#      
+#       print(plot)
+#     }
+# }
+# 
+# state.graph(Merge_Cardiology)
+
+```
+
+
+
+```{r cars_1,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+
+```{r cars_2,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(r)
+
+
+```
+
+
+
+###Total Payments
+```{r cars_3,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(t)
+
+
+```
+
+
+```{r cars_4,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(s)
+
+
+```
+
+
+```{r cars_5,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(u)
+
+
+```
+
+###ALL States Medicare
+```{r cars_6,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(q_1)
+
+
+```
+
+```{r cars_7,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p_1)
+
+
+```
+
+```{r cars_8,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(r_1)
+
+
+```
+
+###ALL States Total
+```{r cars_9,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(t_1)
+
+
+```
+
+```{r cars_10,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(s_1)
+
+
+```
+
+```{r cars_11,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(u_1)
+
+
+```
+
+```{r cluster_1,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_2,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_3,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_4,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_5,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_6,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_7,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_8,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_9,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+```{r cluster_10,echo=FALSE,fig.width=12, fig.height=12,warning=FALSE, message=FALSE}
+
+
+
+ggplotly(p)
+
+
+```
+
+
+
+
+
+
+
+
+
